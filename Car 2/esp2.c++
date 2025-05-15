@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <WebServer.h>
 
 // RSU Connection Details
 const char* RSU_IP = "192.168.4.1";
@@ -11,6 +12,26 @@ const char* PASSWORD = "12345678";
 WiFiClient client;
 String megaData = "";
 
+// Web server object on port 80
+WebServer server(80);
+String lastRsuMessage = "No messages received yet.";
+
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><title>ESP32 RSU Messages</title>";
+  html += "<meta http-equiv='refresh' content='5'>";
+  html += "<style>";
+  html += "body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }";
+  html += ".container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }";
+  html += "h1 { color: #0056b3; }";
+  html += "p { font-size: 1.2em; }";
+  html += "</style></head><body>";
+  html += "<div class='container'>";
+  html += "<h1>RSU Message</h1>";
+  html += "<p>" + lastRsuMessage + "</p>";
+  html += "</div></body></html>";
+  server.send(200, "text/html", html);
+}
+
 void setup() {
   Serial.begin(115200);      // Serial0 for debugging
   Serial2.begin(115200, SERIAL_8N1, 16, 17);  // Serial2 to Mega
@@ -19,9 +40,15 @@ void setup() {
   connectToWiFi();
   Serial.println("ESP32: Started (Serial0)");
   Serial2.println("ESP32: Started (Serial2 to Mega)");
+
+  server.on("/", handleRoot);
+  server.begin();
+  Serial.println("ESP32: HTTP server started. Access at http://" + WiFi.localIP().toString() + "/");
 }
 
 void loop() {
+  server.handleClient();
+
   if (WiFi.status() != WL_CONNECTED) {
     connectToWiFi();
   } else if (!client.connected()) {
@@ -52,6 +79,7 @@ void loop() {
     String receivedMessage = client.readStringUntil('\n');
     receivedMessage.trim();
     Serial.println("ESP32: From RSU: " + receivedMessage);
+    lastRsuMessage = receivedMessage;
 
     if (receivedMessage.startsWith("Warning:")) {
       // Tell Arduino to take the first exit it sees
